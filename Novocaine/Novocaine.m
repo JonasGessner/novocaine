@@ -98,10 +98,7 @@ extern "C" {
 #endif
 
 
-
-static Novocaine *audioManager = nil;
-
-@interface Novocaine()
+@interface Novocaine ()
 
 // redeclare readwrite for class continuation
 @property (nonatomic, assign, readwrite) AudioUnit inputUnit;
@@ -126,6 +123,7 @@ static Novocaine *audioManager = nil;
 @property (nonatomic, strong) NSString *defaultInputDeviceName;
 @property (nonatomic, assign) AudioDeviceID defaultOutputDeviceID;
 @property (nonatomic, strong) NSString *defaultOutputDeviceName;
+
 - (void)enumerateAudioDevices;
 #endif
 
@@ -142,23 +140,23 @@ static Novocaine *audioManager = nil;
 
 @implementation Novocaine
 
+static Novocaine *audioManager = nil;
+
 #pragma mark - Singleton Methods
-+ (Novocaine *) audioManager
-{
-	@synchronized(self)
-	{
-		if (audioManager == nil) {
-			audioManager = [[Novocaine alloc] init];
-		}
-	}
++ (instancetype)audioManager {
+	static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        audioManager = [[Novocaine alloc] init];
+    });
+    
     return audioManager;
 }
 
-+ (id)allocWithZone:(NSZone *)zone {
+
++ (instancetype)allocWithZone:(NSZone *)zone {
     @synchronized(self) {
         if (audioManager == nil) {
-            audioManager = [super allocWithZone:zone];
-            return audioManager;  // assignment and return on first allocation
+            return [super allocWithZone:zone];
         }
     }
     return nil; // on subsequent allocation attempts return nil
@@ -171,20 +169,12 @@ static Novocaine *audioManager = nil;
 //    return self;
 //}
 
-- (id)init
-{
-	if (self = [super init])
-	{
-        
-        // Initialize a float buffer to hold audio
-		self.inData  = (float *)calloc(8192, sizeof(float)); // probably more than we'll need
-        self.outData = (float *)calloc(8192, sizeof(float));
-        
-        self.inputBlock = nil;
-        self.outputBlock = nil;
-        
+- (instancetype)init {
+    self = [super init];
+    
+	if (self) {
 #if defined ( USING_OSX )
-        self.deviceNames = [[NSMutableArray alloc] initWithCapacity:100]; // more than we'll need
+        self.deviceNames = [[NSMutableArray alloc] init];
 #endif
         
         self.playing = NO;
@@ -195,12 +185,9 @@ static Novocaine *audioManager = nil;
         
         // start audio units
         [self setupAudioUnits];
-		
-		return self;
-		
 	}
 	
-	return nil;
+	return self;
 }
 
 - (void)dealloc
@@ -208,9 +195,14 @@ static Novocaine *audioManager = nil;
     free(self.inData);
     free(self.outData);
     
+    self.inData = NULL;
+    self.outData = NULL;
+    
 #if defined (USING_OSX)
     if (self.deviceIDs){
         free(self.deviceIDs);
+        
+        self.deviceIDs = NULL;
     }
 #endif
     
@@ -240,6 +232,25 @@ static Novocaine *audioManager = nil;
 //{
 //    _inputEnabled = inputEnabled;
 //}
+
+//Lazy allocation for in/out data. We don't want to waste any memory!
+- (float *)inData {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        self.inData = (float *)calloc(8192, sizeof(float));
+    });
+    
+    return _inData;
+}
+
+- (float *)outData {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        self.outData = (float *)calloc(8192, sizeof(float));
+    });
+    
+    return _outData;
+}
 
 #ifdef USING_IOS
 - (void)setForceOutputToSpeaker:(BOOL)forceOutputToSpeaker
@@ -651,11 +662,11 @@ static Novocaine *audioManager = nil;
     uint32_t deviceCount = ( propSize / sizeof(AudioDeviceID) );
     
     // Allocate the device IDs
-    _deviceIDs = (AudioDeviceID *)calloc(deviceCount, sizeof(AudioDeviceID));
-    [_deviceNames removeAllObjects];
+    self.deviceIDs = (AudioDeviceID *)calloc(deviceCount, sizeof(AudioDeviceID));
+    [self.deviceNames removeAllObjects];
     
     // Get all the device IDs
-    CheckError( AudioObjectGetPropertyData(kAudioObjectSystemObject, &propertyAddress, 0, NULL, &propSize, _deviceIDs ), "Could not get device IDs");
+    CheckError( AudioObjectGetPropertyData(kAudioObjectSystemObject, &propertyAddress, 0, NULL, &propSize, self.deviceIDs ), "Could not get device IDs");
     
     
     // Get the names of all the device IDs

@@ -85,7 +85,7 @@ typedef void (^NovocaineInputBlock)(float *data, UInt32 numFrames, UInt32 numCha
 
 
 // Singleton methods
-+ (Novocaine *) audioManager;
++ (instancetype)audioManager;
 
 // Audio Unit methods
 - (void)play;
